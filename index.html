@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>随机小姐姐 · 播放器</title>
+<style>
+  :root {
+    --bg-0: #080b16;
+    --bg-1: #0e1424;
+    --card: rgba(255, 255, 255, 0.045);
+    --card-border: rgba(255, 255, 255, 0.09);
+    --text-hi: #eef3ff;
+    --text-mid: #9aa8c9;
+    --text-low: #5d6b8c;
+    --accent: #4f8cff;
+    --accent-2: #2dd4bf;
+    --ok: #34d399;
+    --warn: #fbbf24;
+    --err: #f87171;
+    --radius: 18px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+
+  body {
+    font-family: -apple-system, "SF Pro Display", "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", Roboto, sans-serif;
+    color: var(--text-hi);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    background:
+      radial-gradient(1000px 600px at 15% 0%, rgba(79, 140, 255, .14), transparent 60%),
+      radial-gradient(900px 520px at 90% 100%, rgba(45, 212, 191, .10), transparent 60%),
+      linear-gradient(160deg, var(--bg-0), var(--bg-1));
+  }
+
+  .card {
+    width: 100%;
+    max-width: 640px;
+    height: calc(100vh - 28px);
+    max-height: 980px;
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 22px;
+    padding: 16px;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .55);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .card::-webkit-scrollbar { width: 6px; }
+  .card::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 3px; }
+
+  /* ---------- 头部 ---------- */
+  .head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 12px; flex: none;
+  }
+  .title {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 15px; font-weight: 700; letter-spacing: .3px;
+    white-space: nowrap; cursor: pointer;
+  }
+  .title .logo {
+    width: 26px; height: 26px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    box-shadow: 0 5px 14px rgba(79, 140, 255, .4);
+  }
+  .title .grad {
+    background: linear-gradient(90deg, #fff, var(--accent-2));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .head-right { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: flex-end; }
+
+  .top-btn {
+    width: 28px; height: 28px; border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background: rgba(255,255,255,.04);
+    color: var(--text-mid); font-size: 14px; font-weight: 700;
+    cursor: pointer; line-height: 1;
+    transition: background .2s, color .2s;
+  }
+  .top-btn:hover { background: rgba(255,255,255,.1); color: var(--text-hi); }
+  .top-btn.on { color: var(--accent-2); }
+  .upd-btn {
+    width: auto; min-width: 54px; padding: 0 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; white-space: nowrap; gap: 4px;
+    text-decoration: none;
+  }
+  .log-btn.on { color: var(--ok); box-shadow: 0 0 0 1px rgba(52,211,153,.5); }
+
+  /* ---------- 接口选择 ---------- */
+  .picker { position: relative; display: flex; margin-bottom: 10px; z-index: 20; flex: none; }
+  .pick-trigger {
+    flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 11px 14px; border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: rgba(255,255,255,.04); color: var(--text-hi);
+    font-size: 13px; font-weight: 600; cursor: pointer; min-width: 0;
+    transition: border-color .2s, background .2s;
+  }
+  .pick-trigger:hover { border-color: var(--accent); background: rgba(255,255,255,.07); }
+  .pick-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items:center; gap:8px; min-width:0;}
+  .pick-ico { font-size: 10px; color: var(--text-mid); transition: transform .25s; flex: none; }
+  .picker.open .pick-ico { transform: rotate(180deg); }
+
+  .pick-panel {
+    position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+    z-index: 30; max-height: 330px; overflow-y: auto;
+    background: rgba(10,14,26,.97); border: 1px solid var(--card-border);
+    border-radius: 14px; padding: 6px;
+    box-shadow: 0 26px 60px rgba(0,0,0,.62);
+    backdrop-filter: blur(18px);
+    opacity: 0; transform: translateY(-8px) scale(.98); pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .picker.open .pick-panel { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  .pick-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 12px; border-radius: 9px; cursor: pointer;
+    font-size: 13px; color: var(--text-hi);
+    transition: background .15s;
+  }
+  .pick-item:hover { background: rgba(255,255,255,.06); }
+  .pick-item.sel { background: rgba(79,140,255,.16); }
+  .pick-item .pname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pick-item .ptag {
+    flex: none; font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px; letter-spacing: .5px;
+  }
+  .pick-item .ptag.video { color: #5eead4; background: rgba(45,212,191,.13); border: 1px solid rgba(45,212,191,.28); }
+  .pick-item .ptag.image { color: #93c5fd; background: rgba(96,165,250,.13); border: 1px solid rgba(96,165,250,.28); }
+  .pick-item .pcheck { flex: none; color: var(--accent-2); font-size: 12px; font-weight: 800; opacity: 0; transform: scale(.6); transition: all .15s; }
+  .pick-item.sel .pcheck { opacity: 1; transform: scale(1); }
+  .api-dot { flex:none; width:8px; height:8px; border-radius:50%; background:#33405e; box-shadow:0 0 6px rgba(0,0,0,.4); }
+  .api-dot.ok { background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .api-dot.warn { background:var(--warn); box-shadow:0 0 6px var(--warn); }
+  .api-dot.dead { background:var(--err); box-shadow:0 0 6px var(--err); }
+  .api-dot.loading { background:var(--accent); animation:pulse 1s infinite; }
+
+  /* ---------- 舞台 ---------- */
+  .stage {
+    position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
+    background: #05070d; border-radius: var(--radius); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--card-border);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 18px 40px rgba(0,0,0,.5);
+    touch-action: pan-y;
+  }
+  .stage video, .stage img {
+    width: 100%; height: 100%; object-fit: contain;
+    background: #05070d; display: none;
+  }
+
+  .stage .spinner {
+    position: absolute; left: 50%; bottom: 48px; transform: translateX(-50%);
+    display: none; align-items: center; gap: 9px;
+    padding: 9px 16px; border-radius: 999px;
+    color: var(--text-mid); font-size: 12px; letter-spacing: .5px;
+    background: rgba(10,15,28,.55);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,.09);
+    box-shadow: 0 10px 34px rgba(0,0,0,.4);
+    z-index: 4; pointer-events: none;
+    white-space: nowrap;
+  }
+  .stage .spinner { display: none !important; }
+  .spinner .ring {
+    width: 18px; height: 18px; border-radius: 50%; flex: none;
+    border: 2px solid rgba(255,255,255,.16); border-top-color: var(--accent);
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .stage video, .stage img { transition: opacity .32s ease; }
+  .stage video.fadein, .stage img.fadein { animation: fadeIn .34s ease; }
+  @keyframes fadeIn { from{ opacity:.25; transform:scale(.99);} to{ opacity:1; transform:scale(1);} }
+
+  /* 转场特效 */
+  #trans {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(45,212,191,.20), rgba(79,140,255,.12) 40%, transparent 72%);
+    mix-blend-mode: screen;
+  }
+  #trans.go { animation: transSweep .72s ease both; }
+  @keyframes transSweep {
+    0%   { opacity:0; transform:translateX(-24%) scale(.98); filter:blur(3px); }
+    35%  { opacity:1; }
+    100% { opacity:0; transform:translateX(24%) scale(1.02); filter:blur(6px); }
+  }
+  /* 切换时玻璃微光划过舞台边缘 */
+  .stage.switching::after {
+    content:""; position:absolute; inset:0; z-index:3; pointer-events:none;
+    background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.10) 45%, transparent 60%);
+    background-size:250% 100%; background-repeat:no-repeat;
+    animation: edgeSweep .7s ease both;
+  }
+  @keyframes edgeSweep { 0%{background-position:120% 0;} 100%{background-position:-20% 0;} }
+
+  #soundMask {
+    position: absolute; inset: 0;
+    background: rgba(5,7,13,.55);
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 5; backdrop-filter: blur(2px);
+  }
+  #soundMask .pill {
+    display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #04121a; padding: 13px 24px; border-radius: 999px;
+    font-size: 15px; font-weight: 700;
+    box-shadow: 0 12px 30px rgba(79,140,255,.45);
+    animation: breathe 1.8s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+
+  /* 双击/手势提示 */
+  #gestureHint {
+    position:absolute; left:50%; top:12px; transform:translateX(-50%); z-index:6;
+    font-size:11px; font-weight:500; letter-spacing:1px; color:rgba(233,239,255,.85);
+    padding:5px 12px; border-radius:999px;
+    background:rgba(10,15,28,.35);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+    opacity:0; pointer-events:none; transition:opacity .18s;
+  }
+  #gestureHint.show{ opacity:.55; }
+
+  /* ---------- 控制区 ---------- */
+  .controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex: none; }
+  .btn {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 18px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), #3a6fe0);
+    color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; letter-spacing: .5px;
+    box-shadow: 0 10px 24px rgba(79,140,255,.35);
+    transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+  }
+  .btn:hover { filter: brightness(1.08); box-shadow: 0 14px 30px rgba(79,140,255,.5); }
+  .btn:active { transform: scale(.97); }
+  .btn .ico { font-size: 16px; }
+  .btn.ghost {
+    flex: none; padding: 12px 18px;
+    background: rgba(255,255,255,.06); box-shadow: none;
+    border: 1px solid var(--card-border); color: var(--text-hi);
+  }
+  .btn.ghost:hover { background: rgba(255,255,255,.11); box-shadow: none; filter: none; }
+
+  /* 全屏态：只把视频区(stage)铺满屏幕，头部/分类/按钮全部隐藏，仅剩视频 */
+  .stage:fullscreen { width: 100vw; height: 100vh; border-radius: 0; border: none; }
+  .stage:fullscreen .spinner { bottom: auto; top: 50%; transform: translate(-50%,-50%); }
+
+  /* CSS 兜底全屏（APK/WebView 不支持原生全屏时用）：铺满视口、只留视频 */
+  html.fs-fallback, html.fs-fallback body { height: 100%; overflow: hidden; }
+  html.fs-fallback .card {
+    position: fixed; inset: 0; width: 100vw; height: 100vh;
+    max-width: none; max-height: none; border-radius: 0; border: none; padding: 0; overflow: hidden;
+  }
+  html.fs-fallback .head, html.fs-fallback .picker, html.fs-fallback .controls,
+  html.fs-fallback .toolbar, html.fs-fallback #status, html.fs-fallback .stats,
+  html.fs-fallback .panel, html.fs-fallback #console, html.fs-fallback .rail,
+  html.fs-fallback .meta { display: none !important; }
+  html.fs-fallback .stage { border-radius: 0; border: none; }
+
+  .fs-exit {
+    position: absolute; top: 12px; right: 12px; z-index: 8; display: none;
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.22);
+    background: rgba(10,15,28,.5); color: rgba(255,255,255,.92);
+    font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .stage:fullscreen .fs-exit { display: block; }
+
+  /* ---------- 制作者卡片 ---------- */
+  .credit-mask {
+    position: fixed; inset: 0; z-index: 40;
+    background: rgba(4,7,14,.62);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .credit-mask.show { display: flex; }
+  .credit-card {
+    position: relative; width: min(300px, 80vw);
+    padding: 30px 24px; border-radius: 18px; text-align: center;
+    background: var(--card); border: 1px solid var(--card-border);
+    box-shadow: 0 30px 70px rgba(0,0,0,.6);
+    animation: fadeIn .3s ease;
+  }
+  .credit-ico { font-size: 34px; margin-bottom: 12px; }
+  .credit-lab { font-size: 11px; letter-spacing: 5px; color: var(--text-mid); }
+  .credit-name {
+    margin-top: 12px; font-size: 23px; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .credit-sub { margin-top: 14px; font-size: 12px; color: var(--text-low); }
+  .credit-close {
+    position: absolute; top: 12px; right: 12px;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 1px solid var(--card-border); background: rgba(255,255,255,.06);
+    color: var(--text-mid); cursor: pointer;
+  }
+
+  /* 检查更新对话框 */
+  .upd-mask {
+    position: fixed; inset: 0; z-index: 45;
+    background: rgba(4,7,14,.62);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .upd-mask.show { display: flex; }
+  .upd-card {
+    position: relative; width: min(340px, 84vw);
+    padding: 26px 22px 22px; border-radius: 18px; text-align: center;
+    background: var(--card); border: 1px solid var(--card-border);
+    box-shadow: 0 30px 70px rgba(0,0,0,.6);
+    animation: fadeIn .3s ease;
+  }
+  .upd-x {
+    position: absolute; top: 12px; right: 12px;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 1px solid var(--card-border); background: rgba(255,255,255,.06);
+    color: var(--text-mid); cursor: pointer;
+  }
+  .upd-ico { font-size: 30px; margin-bottom: 10px; color: var(--accent-2); }
+  .upd-lab { font-size: 12px; letter-spacing: 4px; color: var(--text-mid); }
+  .upd-tip { margin-top: 12px; font-size: 12px; color: var(--text-low); line-height: 1.6; }
+  .upd-url {
+    margin-top: 12px; padding: 11px 12px; border-radius: 11px;
+    background: rgba(255,255,255,.05); border: 1px dashed var(--card-border);
+    font-size: 12px; color: var(--accent-2); word-break: break-all;
+    user-select: all; line-height: 1.5;
+  }
+  .upd-actions { margin-top: 18px; display: flex; gap: 10px; justify-content: center; }
+  .upd-btn2 {
+    flex: 1; padding: 12px 0; border-radius: 12px; border: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .upd-btn2.ghost {
+    background: rgba(255,255,255,.06); color: var(--text-mid);
+    border: 1px solid var(--card-border);
+  }
+
+  .toolbar { display:flex; gap:8px; margin-top:8px; flex:none; flex-wrap:wrap; }
+  .tbtn {
+    flex:1; min-width:0;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:8px 10px; border-radius:10px;
+    border:1px solid var(--card-border); background:rgba(255,255,255,.04);
+    color:var(--text-mid); font-size:11px; font-weight:600; cursor:pointer;
+    white-space:nowrap; transition:all .18s;
+  }
+  .tbtn:hover { border-color:var(--accent); color:var(--text-hi); }
+  .tbtn.on { color:var(--accent-2); border-color:rgba(45,212,191,.5); background:rgba(45,212,191,.08); }
+  .tbtn .ico { font-size:13px; }
+
+  #status { margin-top: 8px; font-size: 12px; color: var(--warn); min-height: 14px; letter-spacing: .2px; flex:none; }
+
+  /* ---------- 信息面板 ---------- */
+  .meta {
+    margin-top: 10px; border-top: 1px solid var(--card-border); padding-top: 12px;
+    display: none; flex-direction: column; gap: 6px;
+    font-size: 12px; color: var(--text-mid); line-height: 1.6; flex:none;
+  }
+  .meta.show { display: flex; }
+  .meta .row { display: flex; align-items: baseline; gap: 8px; }
+  .meta .k { color: var(--text-low); flex: 0 0 52px; }
+  .meta .v { color: var(--text-mid); word-break: break-all; }
+  .meta .v strong { color: var(--text-hi); font-weight: 600; }
+  .meta .url { color: var(--accent-2); }
+  .hint { font-size: 11px; color: var(--text-low); margin-top: 4px; }
+
+  /* ---------- 收藏 / 历史 面板 ---------- */
+  .panel {
+    margin-top: 10px; border:1px solid var(--card-border); border-radius:12px;
+    background:rgba(4,7,14,.6); display:none; flex-direction:column; overflow:hidden; flex:none;
+  }
+  .panel.show{ display:flex; }
+  .panel-bar{ display:flex; align-items:center; padding:6px; gap:6px; background:rgba(255,255,255,.03); border-bottom:1px solid var(--card-border);}
+  .tab{ flex:1; padding:7px; border:none; border-radius:8px; background:transparent; color:var(--text-mid); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s;}
+  .tab.on{ background:rgba(45,212,191,.12); color:var(--accent-2); }
+  .panel-body{ max-height:210px; overflow-y:auto; padding:6px; }
+  .panel-body::-webkit-scrollbar{width:6px;} .panel-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:3px;}
+
+  /* ---------- 数据面板 ---------- */
+  .stats{ margin-top:10px; border:1px solid var(--card-border); border-radius:12px; background:rgba(4,7,14,.6); display:none; flex-direction:column; overflow:hidden; flex:none;}
+  .stats.show{ display:flex; }
+  .stats-head{ display:flex; align-items:center; justify-content:space-between; padding:9px 12px; background:rgba(255,255,255,.03); border-bottom:1px solid var(--card-border); font-size:12px; color:var(--text-mid); }
+  .scards{ display:flex; gap:8px; padding:10px 12px; }
+  .scard{ flex:1; background:rgba(255,255,255,.04); border:1px solid var(--card-border); border-radius:10px; padding:10px; text-align:center; }
+  .scard .num{ font-size:20px; font-weight:800; color:var(--accent-2); }
+  .scard .lab{ font-size:10px; color:var(--text-low); margin-top:3px; }
+  .sbody{ padding:6px 12px 12px; }
+  .schart-title{ font-size:11px; color:var(--text-low); margin:6px 2px 6px; }
+  #latChart{ width:100%; height:170px; display:block; }
+  .srank{ margin-top:10px; }
+  .srank .sr{ display:flex; align-items:center; gap:8px; padding:6px 0; font-size:12px; border-bottom:1px dashed rgba(255,255,255,.06);}
+  .srank .sr .nm{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-mid);}
+  .srank .sr .rt{ flex:none; font-weight:700; }
+  .srank .sr .rt.ok{ color:var(--ok);} .srank .sr .rt.warn{ color:var(--warn);} .srank .sr .rt.dead{ color:var(--err);}
+  .srank .sr .lt{ flex:none; color:var(--text-low); font-size:11px; }
+
+  /* ---------- 实时运行日志 ---------- */
+  .console {
+    margin-top: 10px;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(4, 7, 14, .85);
+    display: none;
+    flex-direction: column;
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    flex:none;
+  }
+  .console.show { display: flex; }
+  .console-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px;
+    background: rgba(255,255,255,.04);
+    border-bottom: 1px solid var(--card-border);
+    font-size: 11px; color: var(--text-mid);
+  }
+  .console-bar .dots { display: flex; gap: 5px; }
+  .console-bar .dots i {
+    width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+  }
+  .console-bar .dots i:nth-child(1){ background:#ff5f57; }
+  .console-bar .dots i:nth-child(2){ background:#febc2e; }
+  .console-bar .dots i:nth-child(3){ background:#28c840; }
+  .console-bar .title { letter-spacing: .5px; }
+  .console-bar .cls {
+    background: none; border: none; color: var(--text-mid);
+    font-size: 11px; cursor: pointer; font-family: inherit;
+  }
+  .console-bar .cls:hover { color: #fff; }
+  .console-body {
+    height: 150px;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: #9aa8c9;
+    scrollbar-width: thin;
+  }
+  .console-body::-webkit-scrollbar { width: 6px; }
+  .console-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 3px; }
+  .clog { white-space: pre-wrap; word-break: break-all; animation: logIn .4s ease both; }
+  @keyframes logIn { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+  .clog .t { color: #5d6b8c; }
+  .clog .lv { font-weight: 700; margin: 0 4px; }
+  .lv.info { color: #60a5fa; }
+  .lv.ok   { color: #34d399; }
+  .lv.warn { color: #fbbf24; }
+  .lv.err  { color: #f87171; }
+  .lv.sys  { color: #c084fc; }
+
+  .cur { color: #34d399; font-weight: 700; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; margin-left: 6px; }
+  .eq i {
+    width: 3px; height: 4px; border-radius: 1px; background: #34d399;
+    animation: eqb 1s ease-in-out infinite;
+  }
+  .eq i:nth-child(1){ animation-delay: 0s;   }
+  .eq i:nth-child(2){ animation-delay: .15s; }
+  .eq i:nth-child(3){ animation-delay: .3s;  }
+  .eq i:nth-child(4){ animation-delay: .45s; }
+  .eq i:nth-child(5){ animation-delay: .6s;  }
+  @keyframes eqb { 0%,100%{ height:4px; } 50%{ height:12px; } }
+
+  .console-body::after {
+    content: "";
+    position: sticky; left: 0; bottom: 0;
+    display: block; height: 2px;
+    background: linear-gradient(90deg, transparent, #34d399, transparent);
+    background-size: 60% 100%;
+    background-repeat: no-repeat;
+    animation: sweep 2.2s ease-in-out infinite;
+    opacity: .8;
+  }
+  @keyframes sweep { 0%{ background-position: -100% 0; } 100%{ background-position: 200% 0; } }
+
+  /* ---------- 自适应布局 ---------- */
+  .rail { display: flex; flex-direction: column; gap: 10px; flex: none; min-width: 0; }
+  .rail-hint {
+    font-size: 11px; letter-spacing: .3px; color: rgba(233,239,255,.32);
+    border-top: 1px dashed rgba(255,255,255,.07); padding-top: 10px;
+    text-align: center; flex: none;
+  }
+
+  /* 宽屏 / 横屏：双栏，左侧视频主画面 + 右侧信息控制栏（竖屏保持上方单栏布局不变） */
+  @media (min-width: 700px) and (orientation: landscape) {
+    body { padding: 0; }
+    .card {
+      width: 100%; max-width: none; max-height: 100vh; height: 100vh;
+      padding: 16px 20px; border-radius: 0; border-left: none; border-right: none;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px);
+      grid-template-rows: auto auto minmax(0, 1fr);
+      grid-template-areas:
+        "head  head"
+        "stage picker"
+        "stage rail";
+      gap: 12px 20px;
+      overflow: hidden;
+    }
+    .head   { grid-area: head; margin-bottom: 0; }
+    .stage  { grid-area: stage; height: 100%; min-height: 0; border-radius: 16px; }
+    .picker { grid-area: picker; margin-bottom: 0; align-self: start; }
+    .rail   { grid-area: rail; min-height: 0; overflow-y: auto; padding-right: 4px; }
+    .rail-hint { margin-top: auto; }
+    .rail::-webkit-scrollbar { width: 8px; }
+    .rail::-webkit-scrollbar-thumb { background: rgba(120,170,255,.28); border-radius: 4px; }
+    /* 横屏列表面板加宽，接口名完整显示 */
+    .pick-panel { width: clamp(360px, 42vw, 460px); left: auto; right: 0; }
+    .title { font-size: 22px; }
+    .top-btn { width: 44px; height: 44px; font-size: 20px; border-radius: 12px; }
+    .upd-btn { width: auto; min-width: 74px; padding: 0 18px; font-size: 15px; }
+    .controls .btn { padding: 15px 20px; font-size: 16px; border-radius: 13px; }
+    .tbtn { padding: 12px 16px; font-size: 13px; border-radius: 11px; }
+    #latChart { height: 150px; }
+    .console-body { max-height: 300px; }
+    .fs-exit { top: 16px; right: 16px; width: 44px; height: 44px; font-size: 20px; }
+    #gestureHint { font-size: 20px; letter-spacing: 2px; top: 60px; }
+    .credit-name { font-size: 34px; }
+    /* 横屏 CSS 全屏兜底：收起双栏、视频铺满整屏，不留右侧空列 */
+    html.fs-fallback .card {
+      grid-template-columns: 1fr; grid-template-rows: 1fr;
+      grid-template-areas: "stage"; padding: 0; gap: 0;
+    }
+    html.fs-fallback .stage { grid-area: stage; border-radius: 0; border: none; }
+  }
+  @media (min-width: 1600px) and (orientation: landscape){
+    .card { grid-template-columns: minmax(0, 1fr) 420px; padding: 22px 28px; gap: 14px 24px; }
+  }
+
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div class="title">
+        <span class="logo">♬</span>
+        <span>随机<span class="grad">小姐姐</span></span>
+      </div>
+      <div class="head-right">
+        <button class="top-btn log-btn" id="logBtn" title="实时运行日志">▤</button>
+        <button class="top-btn" id="statsBtn" title="数据面板">▥</button>
+        <button class="top-btn" id="infoBtn" title="接口信息">ⓘ</button>
+        <button class="top-btn upd-btn" id="updBtn" title="检查更新">更新</button>
+      </div>
+    </div>
+
+    <div class="picker">
+      <button class="pick-trigger" id="apiTrigger" type="button">
+        <span class="pick-name" id="apiName"><span class="api-dot" id="apiDot"></span><span id="apiNameTxt"></span></span>
+        <span class="pick-ico">▾</span>
+      </button>
+      <div class="pick-panel" id="apiPanel"></div>
+    </div>
+
+    <div class="stage" id="stage">
+      <div id="trans"></div>
+      <div class="spinner"><div class="ring"></div><span>加载中…</span></div>
+      <div id="soundMask"><div class="pill">♪ 点击开启声音</div></div>
+      <div id="gestureHint">▶</div>
+      <button class="fs-exit" id="fsExit" title="退出全屏">✕</button>
+    </div>
+
+    <div class="rail">
+      <div class="controls">
+        <button class="btn" id="nextBtn"><span class="ico">↻</span>换一个</button>
+        <button class="btn ghost" id="fsBtn"><span class="ico">⛶</span>全屏</button>
+      </div>
+
+      <div class="toolbar">
+        <button class="tbtn" id="autoBtn"><span class="ico">▶</span>自动连播</button>
+      </div>
+
+      <!-- 数据面板 -->
+      <div class="stats" id="statsPanel">
+        <div class="stats-head">今日数据 · 实时统计</div>
+        <div class="scards">
+          <div class="scard"><div class="num" id="sPlays">0</div><div class="lab">今日播放</div></div>
+          <div class="scard"><div class="num" id="sSwitch">0</div><div class="lab">切换次数</div></div>
+          <div class="scard"><div class="num" id="sOk">100%</div><div class="lab">成功率</div></div>
+        </div>
+        <div class="sbody">
+          <div class="schart-title">各接口 · 播放次数</div>
+          <canvas id="latChart"></canvas>
+          <div class="srank" id="sRank"></div>
+        </div>
+      </div>
+
+      <!-- 实时运行日志 -->
+      <div class="console" id="console">
+        <div class="console-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="title">实时运行日志 · terminal<span class="eq" title="运行中"><i></i><i></i><i></i><i></i><i></i></span></span>
+          <button class="cls" id="logCls">清除</button>
+        </div>
+        <div class="console-body" id="logBody"><span class="cur" id="cursor">▌</span></div>
+      </div>
+
+      <div class="meta" id="meta">
+        <div class="row"><span class="k">接口</span><span class="v" id="mName"></span></div>
+        <div class="row"><span class="k">类型</span><span class="v" id="mType"></span></div>
+        <div class="row"><span class="k">URL</span><span class="v url" id="mUrl"></span></div>
+        <div class="hint">手势：左右滑=切接口 · 上滑=下一个 · 下滑=上一个 · 双击=暂停/播放。首次点击任意处开声音；自动连播可开关。</div>
+      </div>
+
+      <div class="rail-hint">左右滑 = 切接口 · 上下滑 = 切视频 · 双击 = 暂停</div>
+    </div>
+  </div>
+
+  <!-- 检查更新对话框 -->
+  <div class="upd-mask" id="updMask">
+    <div class="upd-card">
+      <button class="upd-x" id="updX" title="关闭">✕</button>
+      <div class="upd-ico">⟳</div>
+      <div class="upd-lab">检查更新</div>
+      <div class="upd-tip">复制下方链接，用浏览器打开即可下载最新版：</div>
+      <div class="upd-url" id="updUrl">https://pan.quark.cn/s/0b3e733f92e9</div>
+      <div class="upd-actions">
+        <button class="upd-btn2" id="updCopy">复制链接</button>
+        <button class="upd-btn2 ghost" id="updClose">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 制作者卡片 -->
+  <div class="credit-mask" id="creditMask">
+    <div class="credit-card">
+      <button class="credit-close" id="creditClose" title="关闭">✕</button>
+      <div class="credit-ico">♬</div>
+      <div class="credit-lab">本网页制作者</div>
+      <div class="credit-name">@李李李国富</div>
+      <div class="credit-sub">「随机小姐姐」播放器</div>
+    </div>
+  </div>
+
+<script>
+const stage     = document.getElementById('stage');
+const transEl   = document.getElementById('trans');
+const soundMask = document.getElementById('soundMask');
+const nextBtn   = document.getElementById('nextBtn');
+const infoBtn   = document.getElementById('infoBtn');
+const meta      = document.getElementById('meta');
+const picker    = document.querySelector('.picker');
+const apiTrigger= document.getElementById('apiTrigger');
+const apiPanel  = document.getElementById('apiPanel');
+const apiNameTxt= document.getElementById('apiNameTxt');
+const apiDot    = document.getElementById('apiDot');
+const mName = document.getElementById('mName');
+const mType = document.getElementById('mType');
+const mUrl  = document.getElementById('mUrl');
+const logBtn  = document.getElementById('logBtn');
+const consoleEl = document.getElementById('console');
+const logBody  = document.getElementById('logBody');
+const logCls   = document.getElementById('logCls');
+const statsBtn = document.getElementById('statsBtn');
+const statsPanel = document.getElementById('statsPanel');
+const latChart = document.getElementById('latChart');
+const sPlays = document.getElementById('sPlays');
+const sSwitch = document.getElementById('sSwitch');
+const sOk = document.getElementById('sOk');
+const sRank = document.getElementById('sRank');
+const autoBtn = document.getElementById('autoBtn');
+const gestureHint = document.getElementById('gestureHint');
+
+// ========== 实时运行日志 ==========
+const LEVEL = { info:'info', ok:'ok', warn:'warn', err:'err', sys:'sys' };
+let logOpen = false;
+function log(level, msg) {
+  const now = new Date();
+  const ts = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+  const line = document.createElement('div');
+  line.className = 'clog';
+  line.innerHTML = `<span class="t">[${ts}]</span><span class="lv ${level}">[${level.toUpperCase()}]</span>${msg}`;
+  const cursor = document.getElementById('cursor');
+  logBody.insertBefore(line, cursor);
+  while (logBody.children.length - 1 > 150) logBody.removeChild(logBody.firstChild);
+  logBody.scrollTop = logBody.scrollHeight;
+}
+logBtn.onclick = () => {
+  logOpen = !logOpen;
+  consoleEl.classList.toggle('show', logOpen);
+  logBtn.classList.toggle('on', logOpen);
+  if (logOpen) logBody.scrollTop = logBody.scrollHeight;
+};
+logCls.onclick = () => {
+  logBody.innerHTML = '<span class="cur" id="cursor">▌</span>';
+  log(LEVEL.sys, '日志已清空');
+};
+
+// ========== 实测可用接口（2026-10 测试通过） ==========
+const APIS = [
+  { name: "宇杰 · 黑丝视频",         url: "https://api.yujn.cn/api/heisis.php",         type: "video" },
+  { name: "宇杰 · 白丝视频",         url: "https://api.yujn.cn/api/baisis.php",         type: "video" },
+  { name: "宇杰 · 小姐姐视频",       url: "https://api.yujn.cn/api/zzxjj.php",         type: "video" },
+  { name: "宇杰 · JK洛丽塔",         url: "https://api.yujn.cn/api/jksp.php",          type: "video" },
+  { name: "宇杰 · 丝滑舞蹈",         url: "https://api.yujn.cn/api/shwd.php",          type: "video" },
+  { name: "宇杰 · 完美身材",         url: "https://api.yujn.cn/api/wmsc.php",          type: "video" },
+  { name: "宇杰 · COS系列",          url: "https://api.yujn.cn/api/COS.php",           type: "video" },
+  { name: "宇杰 · 清纯系列",         url: "https://api.yujn.cn/api/qingchun.php",      type: "video" },
+  { name: "宇杰 · 快手变装",         url: "https://api.yujn.cn/api/ksbianzhuang.php",  type: "video" },
+  { name: "宇杰 · 吊带系列",         url: "https://api.yujn.cn/api/diaodai.php",       type: "video" },
+  { name: "宇杰 · 鞠婧祎系列",       url: "https://api.yujn.cn/api/jjy.php",           type: "video" },
+  { name: "宇杰 · 抖音瞳瞳",         url: "https://api.yujn.cn/api/tongtong.php",      type: "video" },
+  { name: "宇杰 · 怼脸自拍",         url: "https://api.yujn.cn/api/duilian.php",       type: "video" },
+  { name: "宇杰 · 漫画芋",           url: "https://api.yujn.cn/api/manhuay.php",       type: "video" },
+  { name: "万象 · 随机小姐姐视频",    url: "https://api.iamap.cn/api/random.video2",    type: "video" },
+  { name: "万象 · 优质小姐姐",       url: "https://api.iamap.cn/api/random.video",     type: "video" },
+  { name: "NRZJ · 小姐姐视频",       url: "http://v.nrzj.vip/video.php",               type: "video" },
+  { name: "鬼鬼 · 快手小姐姐视频",    url: "http://api.guiguiya.com/api/video/ksxjj",   type: "video" },
+  { name: "小白 · 美女图",           url: "https://api.bducds.com/api/pic/?pic=meizi", type: "image" },
+  { name: "小白 · 妹子图",           url: "https://api.bducds.com/api/pic/?pic=girl",  type: "image" },
+  { name: "DUSHE · 随机美女",        url: "https://api.anwei.wang/img",                type: "image" },
+  { name: "98QY · 随机美女壁纸",     url: "https://www.98qy.com/sjbz/api.php",         type: "image" },
+  { name: "宇杰 · 汉服古风",         url: "https://api.yujn.cn/api/hanfu.php",          type: "video" },
+  { name: "宇杰 · 甜美系列",         url: "https://api.yujn.cn/api/tianmei.php",        type: "video" },
+  { name: "村嫂 · 小姐姐视频",       url: "https://www.cunshao.com/666666/api/web.php", type: "video" },
+  { name: "WPON · 美女短视频",       url: "https://tucdn.wpon.cn/api-girl/index.php?wpon=302", type: "video" },
+  { name: "KULEU · 小姐姐",          url: "https://api.kuleu.com/api/MP4_xiaojiejie",   type: "video" },
+  { name: "洛丽 · 二次元随机图",     url: "https://www.loliapi.com/acg/",               type: "image" },
+  { name: "洛丽 · 二次元头像",       url: "https://www.loliapi.com/acg/pp/",            type: "image" },
+];
+
+let current = null;
+let mode = null;
+let soundUnlocked = false;
+let apiIndex = 0;
+let loadStart = 0;
+
+// ========== 本地存储 ==========
+const LS = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+
+// ========== 运行统计（健康检测 + 数据面板） ==========
+let stats = {};
+let todayPlays = 0;
+let switchCount = 0;
+function todayKey(){ const d=new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+function ensureToday(){
+  const k = todayKey();
+  const rec = LS.get('xjf_day', {key:'', plays:0, switch:0});
+  if (rec.key !== k){ todayPlays = 0; switchCount = 0; LS.set('xjf_day',{key:k, plays:0, switch:0}); }
+  else { todayPlays = rec.plays; switchCount = rec.switch; }
+}
+function saveToday(){ LS.set('xjf_day',{key:todayKey(), plays:todayPlays, switch:switchCount}); }
+ensureToday();
+function getStat(name){
+  if(!stats[name]) stats[name] = {plays:0, ok:0, fail:0, latSum:0, latN:0};
+  return stats[name];
+}
+function healthOf(a){
+  const s = getStat(a.name);
+  if (s.ok + s.fail === 0) return 'none';
+  const rate = s.ok / (s.ok + s.fail);
+  if (s.fail >= 2 && rate < 0.5) return 'dead';
+  if (rate > 0.5) return 'ok';
+  return 'warn';
+}
+function liveIndex(from){
+  for (let k=0; k<APIS.length; k++){
+    const i = (from + k) % APIS.length;
+    if (healthOf(APIS[i]) !== 'dead') return i;
+  }
+  return from;
+}
+function markLoading(i){
+  if (i===undefined) i = apiIndex;
+  const dots = apiPanel.querySelectorAll('.api-dot');
+  dots.forEach((d,di)=> d.className = 'api-dot' + (di===i ? ' loading' : ' ' + healthOf(APIS[di])));
+  apiDot.className = 'api-dot loading';
+}
+function updateHealthDots(){
+  const dots = apiPanel.querySelectorAll('.api-dot');
+  dots.forEach((d,di)=>{ d.className = 'api-dot ' + healthOf(APIS[di]); });
+  apiDot.className = 'api-dot ' + healthOf(APIS[apiIndex]);
+}
+
+// ========== 数据面板 ==========
+let statsOpen = false;
+function renderStats(){
+  sPlays.textContent = todayPlays;
+  sSwitch.textContent = switchCount;
+  let okSum=0, tot=0;
+  Object.values(stats).forEach(s=>{ okSum+=s.ok; tot+=s.ok+s.fail; });
+  sOk.textContent = tot ? Math.round(okSum/tot*100) + '%' : '--';
+  drawChart();
+  renderRank();
+}
+function drawChart(){
+  const c = latChart;
+  const dpr = window.devicePixelRatio||1;
+  const W = c.clientWidth, H = c.clientHeight;
+  c.width = W*dpr; c.height = H*dpr;
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  const rows = Object.entries(stats).map(([n,s])=>({n, plays:s.plays, ok:s.ok, fail:s.fail}))
+    .filter(r=>r.plays>0).sort((a,b)=>b.plays-a.plays).slice(0,10);
+  if (rows.length===0){
+    ctx.fillStyle='#5d6b8c'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('还没有播放数据，看一会儿就会出来', W/2, H/2);
+    return;
+  }
+  const maxPlays = Math.max(...rows.map(r=>r.plays), 1);
+  const barW = Math.min(34, W/rows.length - 8);
+  const gap = 6;
+  const x0 = 44, y0 = H - 22, top = 10;
+  const maxH = y0 - top;
+  ctx.font = '10px sans-serif'; ctx.fillStyle='#5d6b8c'; ctx.textAlign='right';
+  for (let g=0; g<=4; g++){
+    const v = maxPlays * g / 4;
+    const y = y0 - maxH * g/4;
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(W-6,y); ctx.stroke();
+    ctx.fillText(Math.round(v), x0-6, y+3);
+  }
+  rows.forEach((r,i)=>{
+    const bw = barW, bh = Math.max(3, maxH * r.plays / maxPlays);
+    const x = x0 + (W-x0-8-rows.length*bw)/2 + i*(bw+gap);
+    const y = y0 - bh;
+    const grad = ctx.createLinearGradient(0,y,0,y0);
+    grad.addColorStop(0, r.ok>=r.fail && r.ok>0 ? '#2dd4bf' : '#fbbf24');
+    grad.addColorStop(1, r.ok>=r.fail && r.ok>0 ? '#4f8cff' : '#f87171');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    const r2 = 4; ctx.roundRect ? ctx.roundRect(x,y,bw,bh,r2) : ctx.rect(x,y,bw,bh);
+    ctx.fill();
+    ctx.fillStyle='#9aa8c9'; ctx.textAlign='center';
+    ctx.fillText(r.n.replace(/.*·\s*/,'').slice(0,5), x+bw/2, y0+13);
+  });
+}
+function renderRank(){
+  const rows = Object.entries(stats).map(([n,s])=>({n, s}))
+    .sort((a,b)=> (b.s.ok - b.s.fail) - (a.s.ok - a.s.fail) || (a.s.latN? a.s.latSum/a.s.latN:0) - (b.s.latN? b.s.latSum/b.s.latN:0));
+  const top = rows.slice(0, 6);
+  sRank.innerHTML = '<div class="schart-title">接口流畅排行 · 按成功率排序</div>';
+  top.forEach(r=>{
+    const s=r.s; const rate = s.ok+s.fail ? Math.round(s.ok/(s.ok+s.fail)*100) : 0;
+    const lat = s.latN ? Math.round(s.latSum/s.latN) : 0;
+    const h = healthOf(APIS.find(a=>a.name===r.n)) ;
+    sRank.innerHTML += `<div class="sr"><span class="nm"></span><span class="rt ${h}">${rate}%</span><span class="lt">${lat}ms · ${s.plays}次</span></div>`;
+    sRank.lastElementChild.querySelector('.nm').textContent = r.n;
+  });
+}
+statsBtn.onclick = () => {
+  statsOpen = !statsOpen;
+  statsPanel.classList.toggle('show', statsOpen);
+  statsBtn.classList.toggle('on', statsOpen);
+  if (statsOpen){ renderStats(); setTimeout(drawChart, 60); }
+};
+
+// ========== 自动连播 ==========
+let autoNext = true;
+function setAuto(v){
+  autoNext = v;
+  autoBtn.classList.toggle('on', v);
+  autoBtn.querySelector('.ico').textContent = v ? '▶' : 'Ⅱ';
+  log(LEVEL.sys, '自动连播：' + (v ? '开' : '关'));
+}
+autoBtn.onclick = ()=> setAuto(!autoNext);
+setAuto(true);
+
+// ========== 转场特效 ==========
+let transTimer = null;
+function trans(){
+  transEl.classList.remove('go'); void transEl.offsetWidth;
+  transEl.classList.add('go');
+  stage.classList.remove('switching'); void stage.offsetWidth;
+  stage.classList.add('switching');
+  clearTimeout(transTimer);
+  transTimer = setTimeout(()=> stage.classList.remove('switching'), 720);
+}
+function showGesture(txt){
+  gestureHint.textContent = txt;
+  gestureHint.classList.add('show');
+  clearTimeout(showGesture._t);
+  showGesture._t = setTimeout(()=>gestureHint.classList.remove('show'), 520);
+}
+
+function freshUrl(api) {
+  return api.url + (api.url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+}
+
+// ========== 播放历史（元素缓存导航：上=下一个 / 下=上一个） ==========
+// 每个条目保存自己的媒体元素，回放时直接切回缓存，无需网络、全部接口通用
+let history = [];
+let hIdx = -1;
+let currentEntry = null;
+
+function mediaBox(type){
+  const el = type === 'video' ? document.createElement('video') : document.createElement('img');
+  if (type === 'video') el.playsinline = true;
+  return el;
+}
+function mount(el){
+  el.style.display = 'block';
+  stage.insertBefore(el, transEl);
+}
+function unmount(el){
+  if (!el || el.parentNode !== stage) return;
+  if (el.pause) el.pause();
+  el.style.display = 'none';
+}
+function capHistory(){
+  while (history.length > 12){
+    const old = history.shift();
+    if (hIdx > 0) hIdx--;
+    if (old.el && old.el !== currentEntry && old.el.parentNode === stage) old.el.remove();
+  }
+}
+
+// 播新视频/图片（上滑到尽头 / 换一个 / 自动连播 / 切接口）
+function playNew(api, targetType){
+  const type = targetType || api.type;
+  history = history.slice(0, hIdx + 1);           // 丢弃前方历史
+  let prev = currentEntry;                        // 旧画面保留作加载底图，避免黑屏
+  if (prev && prev.el) prev.el.onended = null;    // 防止旧画面结束时自动连播打断加载
+  if (prev && prev.el.style.display === 'none'){  // 前一个还在加载中被覆盖（快速连滑）→ 直接丢弃
+    prev.el.remove(); prev = null;
+  }
+  const el = mediaBox(type);
+  const url = freshUrl(api);
+  const entry = {api, mode: type, el, url};
+  el.style.display = 'none';                       // 新元素先隐藏，等就绪再切换
+  stage.insertBefore(el, transEl);
+  history.push(entry); hIdx = history.length - 1;
+  currentEntry = entry;
+  current = api; mode = type;
+  updateMeta();
+  log(LEVEL.sys, `切换 → <b style="color:#eef3ff">${api.name}</b>（${type}）`);
+  log(LEVEL.info, `GET ${url}`);
+  loadStart = Date.now();
+  stage.classList.add('loading');
+  trans();
+
+  function ready(ok, lat){
+    // 已被更新的播放覆盖（用户快速连滑）→ 本元素作废，直接丢弃，避免同时播多个视频
+    if (currentEntry !== entry){
+      if (el.parentNode === stage) el.remove();
+      return;
+    }
+    stage.classList.remove('loading');
+    // 只保留当前元素：强制隐藏舞台上所有其它媒体元素（含旧可见底图），杜绝多个视频同时播放
+    Array.from(stage.children).forEach(ch => {
+      if ((ch.tagName === 'VIDEO' || ch.tagName === 'IMG') && ch !== el) unmount(ch);
+    });
+    el.style.display = 'block';
+    el.classList.add('fadein');
+    setTimeout(() => el.classList.remove('fadein'), 360);
+    if (ok) markResult(api, true, lat);
+  }
+
+  let started = false, errT = null;
+  function isStale(){ return currentEntry !== entry; }
+  if (type === 'video'){
+    el.muted = true;
+    el.src = url;
+    el.oncanplay = () => {
+      if (errT){ clearTimeout(errT); errT = null; }   // 稍后能播了，取消失败判定
+      if (isStale()){ if (el.parentNode === stage) el.remove(); return; }   // 已被更新的覆盖，丢弃
+      started = true;
+      const lat = Date.now() - loadStart;
+      ready(true, lat);
+      log(LEVEL.ok, `视频资源就绪（${lat}ms），启动播放…`);
+      el.play().then(() => {
+        if (soundUnlocked) { el.muted = false; log(LEVEL.ok, '▶ 已开始播放（带声）'); }
+        else { soundMask.style.display = 'flex'; log(LEVEL.warn, '浏览器拦截带声自动播放，点击开声'); }
+      }).catch(() => { });
+    };
+    el.onerror = () => {
+      if (isStale()){ if (el.parentNode === stage) el.remove(); return; }
+      // 画面已能播放后触发的中途 error 属偶发，不再误判为"接口异常"
+      if (started) { log(LEVEL.warn, '播放中途出现错误（画面正常，已忽略）'); return; }
+      // 未开始播放即报错：给 700ms 缓冲，若期间能播放(触发 canplay)则取消，避免把能播的误判为不可用
+      if (errT) return;
+      errT = setTimeout(() => {
+        log(LEVEL.err, '视频加载失败'); ready(false, 0); markResult(api, false, 0); fail(api, 'video');
+      }, 700);
+    };
+    el.onended = () => {
+      if (isStale()) return;
+      if (autoNext){ log(LEVEL.sys, '▶ 播放结束，自动连播下一个…'); playNew(current, mode); }
+    };
+  } else {
+    el.src = url;
+    el.onload = () => {
+      if (isStale()){ if (el.parentNode === stage) el.remove(); return; }
+      const lat = Date.now() - loadStart;
+      ready(true, lat);
+      log(LEVEL.ok, `图片加载完成（${lat}ms）`);
+    };
+    el.onerror = () => {
+      if (isStale()){ if (el.parentNode === stage) el.remove(); return; }
+      log(LEVEL.err, '图片加载失败'); ready(false, 0); markResult(api, false, 0); fail(api, 'image');
+    };
+  }
+  capHistory();
+}
+
+// 切回某条历史（直接播放缓存的媒体元素 = 真正"上一个"）
+function showEntry(entry){
+  if (currentEntry && currentEntry !== entry) unmount(currentEntry.el);
+  mount(entry.el);
+  currentEntry = entry;
+  current = entry.api; mode = entry.mode;
+  updateMeta();
+  stage.classList.remove('loading');
+  trans();
+  if (mode === 'video'){
+    const v = entry.el;
+    v.muted = !soundUnlocked;
+    v.currentTime = 0;
+    v.play().then(() => {
+      if (soundUnlocked) log(LEVEL.ok, '▶ 已回放（带声）');
+      else { soundMask.style.display = 'flex'; log(LEVEL.warn, '点击开声'); }
+    }).catch(() => { });
+  } else {
+    log(LEVEL.ok, '▶ 已回放上一张图片');
+  }
+}
+
+function navNext(){
+  if (hIdx < history.length - 1){
+    hIdx++;
+    log(LEVEL.sys, '上滑 下一个（回放缓存）');
+    showEntry(history[hIdx]);
+  } else {
+    log(LEVEL.info, '请求新资源（换下一个）…');
+    playNew(current, mode);
+  }
+}
+function navPrev(){
+  if (hIdx > 0){
+    hIdx--;
+    log(LEVEL.sys, '下滑 上一个（回放缓存）');
+    showEntry(history[hIdx]);
+  } else {
+    log(LEVEL.warn, '已经是第一个视频');
+    showGesture('已是第一个');
+  }
+}
+
+function fail(api, failedType){
+  stage.classList.remove('loading');
+  // 接口加载失败：不做无限重试（避免"视频↔图片"死循环刷爆统计），直接跳到下一个可用接口
+  log(LEVEL.warn, `${api.name} 加载失败，自动跳到下一可用接口…`);
+  const ni = liveIndex(apiIndex + 1);
+  if (ni === apiIndex){ return; }
+  selectApi(ni);
+}
+
+// ========== 下拉列表 ==========
+function renderPanel(){
+  apiPanel.innerHTML = '';
+  APIS.forEach((a, i) => {
+    const it = document.createElement('div');
+    it.className = 'pick-item' + (i === apiIndex ? ' sel' : '');
+    it.dataset.i = i;
+    const tag = a.type === 'video' ? '视频' : '图片';
+    it.innerHTML = `<span class="api-dot ${healthOf(a)}"></span><span class="pname"></span><span class="ptag ${a.type}">${tag}</span><span class="pcheck">✓</span>`;
+    it.querySelector('.pname').textContent = a.name;
+    it.addEventListener('click', () => selectApi(i));
+    apiPanel.appendChild(it);
+  });
+  apiNameTxt.textContent = APIS[apiIndex].name;
+  updateHealthDots();
+}
+function selectApi(i) {
+  apiIndex = i;
+  apiNameTxt.textContent = APIS[i].name;
+  apiPanel.querySelectorAll('.pick-item').forEach(el => el.classList.toggle('sel', Number(el.dataset.i) === i));
+  picker.classList.remove('open');
+  markLoading(i);
+  history = []; hIdx = -1; currentEntry = null;
+  // 清掉舞台残留的媒体元素，避免堆积
+  Array.from(stage.children).forEach(el => {
+    if (el.tagName === 'VIDEO' || el.tagName === 'IMG') el.remove();
+  });
+  playNew(APIS[i]);
+}
+apiTrigger.addEventListener('click', (e) => { e.stopPropagation(); picker.classList.toggle('open'); });
+document.addEventListener('click', (e) => { if (!picker.contains(e.target)) picker.classList.remove('open'); });
+
+function load(api){ if (api) playNew(api, api.type); }
+
+function markResult(api, ok, lat){
+  const s = getStat(api.name);
+  switchCount++;
+  if (ok){ s.ok++; s.plays++; if(lat>0){ s.latSum+=lat; s.latN++; } todayPlays++; }
+  else { s.fail++; }
+  saveToday();
+  sPlays.textContent = todayPlays;
+  sSwitch.textContent = switchCount;
+  updateHealthDots();
+  if (statsOpen){ renderStats(); }
+}
+
+function updateMeta() {
+  if (!current) return;
+  mName.textContent = current.name;
+  mType.textContent = mode === 'video' ? '视频' : '图片';
+  mUrl.textContent = current.url;
+}
+
+function unlockSound() {
+  soundMask.style.display = 'none';
+  if (!soundUnlocked) {
+    soundUnlocked = true;
+    log(LEVEL.ok, '✓ 已捕获用户手势，声音已开启');
+  }
+  if (mode === 'video' && currentEntry) {
+    currentEntry.el.muted = false;
+    currentEntry.el.play().catch(() => {});
+  }
+}
+document.addEventListener('click', unlockSound, { once: true });
+
+// 换一个按钮 = 新的随机视频
+function nextVideo(){
+  if (healthOf(APIS[apiIndex]) === 'dead'){
+    const ni = liveIndex(apiIndex + 1);
+    log(LEVEL.warn, '当前接口已失效，自动跳到下一可用接口…');
+    selectApi(ni);
+    return;
+  }
+  log(LEVEL.info, '请求新资源（换下一个）…');
+  playNew(current, mode);
+}
+nextBtn.onclick = nextVideo;
+
+// ========== 全屏播放（只留视频画面） ==========
+const fsBtn = document.getElementById('fsBtn');
+const fsExit = document.getElementById('fsExit');
+let fsFallback = false;   // CSS 兜底全屏（WebView/APK 原生全屏不可用时启用）
+function enterFsFallback(){ fsFallback = true; document.documentElement.classList.add('fs-fallback'); log(LEVEL.ok, '已进入 CSS 全屏'); }
+function exitFsAll(){
+  fsFallback = false;
+  document.documentElement.classList.remove('fs-fallback');
+  const doc = document;
+  if (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement){
+    (doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || function(){}).call(doc);
+  }
+}
+function toggleFull(){
+  const doc = document;
+  const isFs = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement;
+  if (fsFallback || isFs){ exitFsAll(); syncFsIcon(); return; }
+  // 先尝试原生全屏（浏览器可用）；WebView/APK 不生效时 300ms 后自动回退 CSS 全屏
+  const rf = stage.requestFullscreen || stage.webkitRequestFullscreen;
+  let tried = false;
+  if (rf){
+    try { rf.call(stage); tried = true; } catch(e){}
+  }
+  if (tried){
+    setTimeout(() => {
+      if (!(doc.fullscreenElement || doc.webkitFullscreenElement) && !fsFallback) enterFsFallback();
+      syncFsIcon();
+    }, 320);
+  } else {
+    enterFsFallback(); syncFsIcon();
+  }
+}
+fsBtn.onclick = toggleFull;
+fsExit.onclick = () => { exitFsAll(); syncFsIcon(); };   // 点✕退出时同步隐藏叉叉
+function syncFsIcon(){
+  const fs = !!(fsFallback || document.fullscreenElement || document.webkitFullscreenElement);
+  fsBtn.querySelector('.ico').textContent = fs ? '✕' : '⛶';
+  fsBtn.classList.toggle('on', fs);
+  fsExit.style.display = fs ? 'block' : 'none';
+}
+document.addEventListener('fullscreenchange', syncFsIcon);
+document.addEventListener('webkitfullscreenchange', syncFsIcon);
+
+// ========== 滑动手势 ==========
+let touchX=0, touchY=0, touchT=0, lastTap=0;
+const SWIPE = 42;
+stage.addEventListener('touchstart', (e)=>{
+  const t = e.touches[0];
+  touchX = t.clientX; touchY = t.clientY; touchT = Date.now();
+}, {passive:true});
+stage.addEventListener('touchmove', (e)=>{ e.preventDefault(); }, {passive:false});
+stage.addEventListener('touchend', (e)=>{
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchX, dy = t.clientY - touchY;
+  const dt = Date.now() - touchT;
+  // 双击暂停/播放
+  if (Math.abs(dx) < 12 && Math.abs(dy) < 12){
+    const now = Date.now();
+    if (now - lastTap < 300){
+      if (mode==='video' && currentEntry){
+        const v = currentEntry.el;
+        if (v.paused) { v.play().catch(()=>{}); showGesture('▶ 播放'); }
+        else { v.pause(); showGesture('Ⅱ 暂停'); }
+      } else showGesture('图片模式');
+      lastTap = 0;
+    } else lastTap = now;
+    return;
+  }
+  if (dt < 650 && (Math.abs(dx) > SWIPE || Math.abs(dy) > SWIPE)){
+    if (Math.abs(dx) > Math.abs(dy)){
+      const delta = dx < 0 ? 1 : -1;
+      const ni = (apiIndex + delta + APIS.length) % APIS.length;
+      showGesture(dx<0 ? '→ 下一接口' : '← 上一接口');
+      log(LEVEL.sys, '手势：左右滑动切接口 → ' + APIS[ni].name);
+      selectApi(ni);
+    } else {
+      if (dy < 0){ showGesture('↑ 下一个'); log(LEVEL.sys, '手势：上滑换下一个视频'); navNext(); }
+      else       { showGesture('↓ 上一个'); log(LEVEL.sys, '手势：下滑查看上一个视频'); navPrev(); }
+    }
+  }
+}, {passive:true});
+
+infoBtn.onclick = () => {
+  const show = meta.classList.toggle('show');
+  infoBtn.classList.toggle('on', show);
+};
+
+// ========== 检查更新（对话框 + 复制链接） ==========
+const UPD_URL = 'https://pan.quark.cn/s/0b3e733f92e9';
+const updMask  = document.getElementById('updMask');
+const updX     = document.getElementById('updX');
+const updCopy  = document.getElementById('updCopy');
+const updClose = document.getElementById('updClose');
+function showUpd(){
+  log(LEVEL.ok, '检查更新：弹出下载链接…');
+  updMask.classList.add('show');
+}
+function closeUpd(){ updMask.classList.remove('show'); }
+function copyUpdUrl(){
+  const ta = document.createElement('textarea');
+  ta.value = UPD_URL;
+  ta.style.position = 'fixed'; ta.style.top = '-9999px'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select(); ta.setSelectionRange(0, 99999);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch(e){}
+  document.body.removeChild(ta);
+  if (ok){
+    updCopy.textContent = '已复制 ✓';
+    log(LEVEL.ok, '链接已复制，去浏览器粘贴打开即可');
+  } else {
+    updCopy.textContent = '复制失败';
+    log(LEVEL.err, '复制失败，请长按上方链接手动复制');
+  }
+  setTimeout(()=>{ updCopy.textContent = '复制链接'; }, 2000);
+}
+updBtn.onclick = showUpd;
+// 网页版自动同步最新，无需更新按钮；仅离线版（file:// 的 APK/本地）显示
+if (location.protocol !== 'file:') updBtn.style.display = 'none';
+updX.addEventListener('click', closeUpd);
+updClose.addEventListener('click', closeUpd);
+updMask.addEventListener('click', (e)=>{ if(e.target===updMask) closeUpd(); });
+updCopy.addEventListener('click', copyUpdUrl);
+
+// ========== 制作者卡片（点标题弹出） ==========
+const creditMask = document.getElementById('creditMask');
+const creditClose = document.getElementById('creditClose');
+document.querySelector('.title').addEventListener('click', () => creditMask.classList.add('show'));
+creditClose.addEventListener('click', () => creditMask.classList.remove('show'));
+creditMask.addEventListener('click', (e) => { if (e.target === creditMask) creditMask.classList.remove('show'); });
+
+// 默认第一个
+log(LEVEL.sys, `播放器初始化完成 · 共加载 ${APIS.length} 个接口`);
+renderPanel();
+load(APIS[0]);
+
+</script>
+</body>
+</html>
